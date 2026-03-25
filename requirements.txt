@@ -1,0 +1,11 @@
+fastapi==0.135.2
+uvicorn==0.42.0
+sqlalchemy==2.0.48
+geoalchemy2==0.18.4
+psycopg2-binary==2.9.11
+redis==7.4.0
+pydantic==2.12
+python-dotenv==1.2.2
+alembic==1.18.4
+pydantic-settings==2.9.1
+httpx==0.28.1
