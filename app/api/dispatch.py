@@ -6,13 +6,13 @@ dispatch_router = APIRouter(
 )
 
 @dispatch_router.post("/request")
-def dispatch_request():
+def create_dispatch_request():
     return {
         "message": "Dispatch endpoint not yet implemented"
     }
 
 @dispatch_router.get("/history")
-def dispatch_history():
+def get_dispatch_history():
     return {
         "message": "To be implemented",
         "dispatches": []
