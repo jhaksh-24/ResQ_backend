@@ -1,15 +1,18 @@
+from geoalchemy2 import Geometry
 from datetime import (
     datetime,
     timezone
 )
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     Integer,
     Column,
     String,
     Enum,
-    ForeignKey
+    ForeignKey,
+    JSON
 )
 from app.db.session import Base
 import enum
@@ -21,6 +24,11 @@ class AmbulanceStatus (enum.Enum):
     AT_HOSPITAL = "at_hospital"
     RETURNING = "returning"
     OFFLINE = "offline"
+
+class IncidentStatus (enum.Enum):
+    REPORTED = "reported"
+    DISPATCHED = "dispatched"
+    RESOLVED = "resolved"
 
 
 class Ambulance (Base):
@@ -78,7 +86,149 @@ class Station (Base):
         Float,
         nullable=False
     )
+    geom = Column(
+        Geometry(
+            'POINT',
+            srid=4326
+        )
+    )
     capacity = Column(
         Integer,
         nullable=False
+    )
+
+class Incident (Base):
+    __tablename__ = "incident"
+    id = Column(
+        Integer,
+        primary_key=True
+    )
+    latitude = Column(
+        Float,
+        nullable=False
+    )
+    longitude = Column(
+        Float,
+        nullable=False
+    )
+    incident_type = Column(
+        String,
+        nullable=False
+    )
+    status = Column(
+        Enum(IncidentStatus),
+        nullable=False,
+        default=IncidentStatus.REPORTED
+    )
+    created_at = Column(
+        DateTime(
+            timezone=True
+        ),
+        default=lambda: datetime.now(timezone.utc)
+    )
+    resolved_at = Column(
+        DateTime(
+            timezone=True
+        ),
+        nullable=True
+    )
+
+class Hospital (Base):
+    __tablename__ = "hospital"
+    id = Column(
+        Integer,
+        primary_key=True
+    )
+    name = Column(
+        String,
+        nullable=False
+    )
+    latitude = Column(
+        Float,
+        nullable=False
+    )
+    longitude = Column(
+        Float,
+        nullable=False
+    )
+    specialties = Column(
+        JSON,
+        nullable=False,
+        default=list
+    )
+    er_capacity = Column(
+        Integer,
+        nullable=False
+    )
+    is_24x7 = Column(
+        Boolean,
+        nullable=False
+    )
+
+class DispatchLog (Base):
+    __tablename__ = "dispatch_log"
+    id = Column(
+        Integer,
+        primary_key=True 
+    )
+    incident_id = Column(
+        Integer,
+        ForeignKey("incident.id"),
+        nullable=False
+    )
+    ambulance_id = Column(
+        Integer,
+        ForeignKey("ambulance.id"),
+        nullable=False
+    )
+    hospital_id = Column(
+        Integer,
+        ForeignKey("hospital.id"),
+        nullable=True
+    )
+    eta_seconds = Column(
+        Integer,
+        nullable=False
+    )
+    alternatives_considered = Column(
+        Integer,
+        default=0
+    )
+    dispatched_at = Column(
+        DateTime(
+            timezone=True
+        ),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False
+    )
+
+class Zone (Base):
+    __tablename__ = "zone"
+    id = Column(
+        Integer,
+        primary_key=True
+    )
+    geom = Column(
+        Geometry(
+            'POLYGON',
+            srid=4326
+        )
+    )
+    risk_level = Column(
+        Float,
+        nullable=False
+    )
+    created_at = Column(
+        DateTime(
+            timezone=True
+        ),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at = Column(
+        DateTime(
+            timezone=True
+        ),
+        nullable=True,
+        onupdate=lambda: datetime.now(timezone.utc)
     )
