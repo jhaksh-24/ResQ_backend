@@ -7,23 +7,29 @@ from geoalchemy2.functions import ST_X, ST_Y, ST_Centroid
 
 logger = logging.getLogger(__name__)
 
+from app.core.routing import get_osrm_eta
+
 async def find_rebalance_destination(unit_id: int, db: Session):
     """
     Tier 3 Rebalancing: Passive Post-Handoff.
     Finds the optimal zone for an ambulance to relocate to after dropping off a patient.
     
-    Algorithm:
-    1. Fetch all zones and compute their centroid (center point).
-    2. Identify the distance from each zone to the nearest AVAILABLE ambulance.
-    3. Calculate 'Coverage Gap' = Zone Risk Level * Distance to Nearest Ambulance.
-    4. Send the newly available unit to the zone with the highest Coverage Gap.
+    Architecture (Two-Pass Optimization):
+    1. Pass 1 (Fast): Use Haversine to find the 5 most 'vulnerable' zones city-wide.
+    2. Pass 2 (Accurate): Use OSRM to find actual drive time to those 5 zones.
+    3. Decision: Optimize for maximum vulnerability reduction per minute of drive time.
     """
-    # 1. Get all available fleet EXCEPT this unit
+    # Get the state of the ambulance we are trying to rebalance
+    this_amb = FleetStateManager.get_unit(unit_id)
+    if not this_amb:
+        return None
+        
+    this_lat = float(this_amb["latitude"])
+    this_lng = float(this_amb["longitude"])
+
     all_available = FleetStateManager.get_all_available()
     other_ambulances = [a for a in all_available if a.get("unit_id") != unit_id]
     
-    # 2. Get all zones with their centroids using PostGIS functions
-    # ST_Y is latitude, ST_X is longitude
     try:
         zones = db.query(
             Zone.id,
@@ -36,35 +42,53 @@ async def find_rebalance_destination(unit_id: int, db: Session):
         return None
     
     if not zones:
-        logger.warning("No zones found in database for rebalancing.")
         return None
         
-    best_zone = None
-    highest_coverage_gap = -1
+    # --- PASS 1: Haversine Pre-Filter ---
+    zone_vulnerabilities = []
     
     for zone in zones:
-        # 3. Find current distance to nearest ambulance for this zone
         nearest_amb_dist = 999999.0
-        
         for amb in other_ambulances:
-            amb_lat = float(amb["latitude"])
-            amb_lng = float(amb["longitude"])
-            # Fast Haversine straight-line approximation
-            dist = haversine_distance(amb_lat, amb_lng, zone.lat, zone.lng)
+            dist = haversine_distance(float(amb["latitude"]), float(amb["longitude"]), zone.lat, zone.lng)
             if dist < nearest_amb_dist:
                 nearest_amb_dist = dist
                 
-        # 4. Calculate Coverage Gap
-        # If there are no other ambulances, nearest_amb_dist is massive, 
-        # so it just routes to the highest risk zone globally.
-        coverage_gap = zone.risk_level * nearest_amb_dist
+        vulnerability = zone.risk_level * nearest_amb_dist
+        zone_vulnerabilities.append({
+            "zone": zone,
+            "vulnerability": vulnerability
+        })
         
-        if coverage_gap > highest_coverage_gap:
-            highest_coverage_gap = coverage_gap
+    # Sort by vulnerability and take the Top 5
+    zone_vulnerabilities.sort(key=lambda x: x["vulnerability"], reverse=True)
+    top_candidates = zone_vulnerabilities[:5]
+    
+    # --- PASS 2: OSRM Drive Time Check ---
+    best_zone = None
+    best_final_score = -1
+    
+    for candidate in top_candidates:
+        zone = candidate["zone"]
+        vulnerability = candidate["vulnerability"]
+        
+        # How long will it take OUR ambulance to get there?
+        eta_seconds = await get_osrm_eta(this_lat, this_lng, zone.lat, zone.lng)
+        
+        if eta_seconds >= 999999 or eta_seconds == 0:
+            continue # Skip unreachable zones
+            
+        # Optimization Function: Vulnerability mitigated per minute of driving
+        # We want to solve high vulnerability without driving across the entire city.
+        eta_minutes = eta_seconds / 60.0
+        final_score = vulnerability / eta_minutes
+        
+        if final_score > best_final_score:
+            best_final_score = final_score
             best_zone = zone
             
     if best_zone:
-        logger.info(f"Rebalancing Unit {unit_id} to Zone {best_zone.id} (Coverage Gap: {highest_coverage_gap})")
+        logger.info(f"Rebalancing Unit {unit_id} to Zone {best_zone.id} (Score: {best_final_score})")
         return {
             "target_zone_id": best_zone.id,
             "target_lat": best_zone.lat,
