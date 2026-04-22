@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from app.core.fleet_state import FleetStateManager
+from app.core.websocket_manager import manager
 
 fleet_router = APIRouter(
     prefix="/fleet",
@@ -30,20 +31,52 @@ def get_fleet_unit(unit_id: int):
     return state
 
 @fleet_router.put("/{unit_id}/location")
-def update_fleet_location(unit_id: int, location: LocationUpdate):
-    """Update high-frequency GPS coordinates for an ambulance."""
+async def update_fleet_location(unit_id: int, location: LocationUpdate):
+    """Update high-frequency GPS coordinates for an ambulance and broadcast to dashboard."""
     FleetStateManager.update_location(
         unit_id=unit_id,
         lat=location.latitude,
         lng=location.longitude
     )
+    
+    # Broadcast the new location to all connected websockets (e.g., Dispatcher Dashboard)
+    await manager.broadcast({
+        "type": "LOCATION_UPDATE",
+        "unit_id": unit_id,
+        "latitude": location.latitude,
+        "longitude": location.longitude
+    })
+    
     return {"message": "Location updated successfully"}
 
 @fleet_router.put("/{unit_id}/status")
-def update_fleet_status(unit_id: int, status_update: StatusUpdate):
-    """Update the dispatch status of an ambulance."""
+async def update_fleet_status(unit_id: int, status_update: StatusUpdate):
+    """Update the dispatch status of an ambulance and broadcast to dashboard."""
     FleetStateManager.update_status(
         unit_id=unit_id,
         status=status_update.status
     )
+    
+    # Broadcast the status change
+    await manager.broadcast({
+        "type": "STATUS_UPDATE",
+        "unit_id": unit_id,
+        "status": status_update.status
+    })
+    
     return {"message": "Status updated successfully"}
+
+@fleet_router.websocket("/ws")
+async def fleet_websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for the Dispatcher Dashboard.
+    Connect here to receive real-time updates when any ambulance moves or changes status.
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            # We don't expect the dashboard to send us data, but we must keep the loop open
+            # so we know when the client disconnects.
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
