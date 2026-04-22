@@ -1,9 +1,23 @@
+import asyncio
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from app.api import main_router
+from app.core.rebalancing import rebalancing_task_loop
 
-app = FastAPI(title="ResQ Backend",
-              description="built to move faster than tragedy",
-              version="0.1.0 beta")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start the Tier 2 rebalancing background loop
+    task = asyncio.create_task(rebalancing_task_loop())
+    yield
+    # Shutdown: Cancel the task
+    task.cancel()
+
+app = FastAPI(
+    title="ResQ Backend",
+    description="built to move faster than tragedy",
+    version="0.1.0 beta",
+    lifespan=lifespan
+)
 
 @app.get("/")
 def root():

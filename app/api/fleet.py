@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.db.session import get_db
 from app.core.fleet_state import FleetStateManager
 from app.core.websocket_manager import manager
-
+from app.core.rebalancing import find_rebalance_destination
 fleet_router = APIRouter(
     prefix="/fleet",
     tags=["Fleet"]
@@ -50,7 +52,11 @@ async def update_fleet_location(unit_id: int, location: LocationUpdate):
     return {"message": "Location updated successfully"}
 
 @fleet_router.put("/{unit_id}/status")
-async def update_fleet_status(unit_id: int, status_update: StatusUpdate):
+async def update_fleet_status(
+    unit_id: int, 
+    status_update: StatusUpdate,
+    db: Session = Depends(get_db)
+):
     """Update the dispatch status of an ambulance and broadcast to dashboard."""
     FleetStateManager.update_status(
         unit_id=unit_id,
@@ -64,7 +70,25 @@ async def update_fleet_status(unit_id: int, status_update: StatusUpdate):
         "status": status_update.status
     })
     
-    return {"message": "Status updated successfully"}
+    # --- Tier 3 Rebalancing Trigger ---
+    # When an ambulance finishes a job and becomes 'available', 
+    # immediately find the optimal zone to reposition it to.
+    rebalance_cmd = None
+    if status_update.status.lower() == "available":
+        destination = await find_rebalance_destination(unit_id, db)
+        if destination:
+            # We broadcast a REBALANCE command to the crew app
+            rebalance_cmd = destination
+            await manager.broadcast({
+                "type": "REBALANCE_COMMAND",
+                "unit_id": unit_id,
+                "destination": destination
+            })
+            
+    return {
+        "message": "Status updated successfully",
+        "rebalance_command": rebalance_cmd
+    }
 
 @fleet_router.websocket("/ws")
 async def fleet_websocket_endpoint(websocket: WebSocket):
