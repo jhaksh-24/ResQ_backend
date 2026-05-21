@@ -153,14 +153,16 @@ stateDiagram-v2
     [*] --> OFFLINE
     OFFLINE --> AVAILABLE : Shift Starts
     AVAILABLE --> DISPATCHED : Incident Assigned
+    AVAILABLE --> OFFLINE : Shift Ends
     DISPATCHED --> EN_ROUTE_HOSPITAL : Patient Picked Up
+    DISPATCHED --> AVAILABLE : Incident Cancelled
     EN_ROUTE_HOSPITAL --> AT_HOSPITAL : Arrived at ER
     AT_HOSPITAL --> RETURNING : Handoff Complete
     RETURNING --> AVAILABLE : Reached Base/Zone
-    
+
     %% Free Agent Reassignment
-    RETURNING --> DISPATCHED : Reassigned mid-route
-    AVAILABLE --> AVAILABLE : Tier 2/3 Rebalancing
+    RETURNING --> DISPATCHED : Reassigned mid-route (free-agent rule)
+    AVAILABLE --> AVAILABLE : Tier 2/3 Rebalancing (relocate to high-demand station)
 ```
 
 ### Dispatch Logic Flow
