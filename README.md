@@ -320,16 +320,16 @@ Every dispatch decision is logged with timestamp, unit selected, ETA computed, a
 
 ## Roadmap
 
-- [ ] Bengaluru OSM road network loading
-- [ ] Historical incident data pipeline
-- [ ] Stage 1: Risk surface generation
-- [ ] Stage 2: Surface evolution prediction
-- [ ] Stage 3: Adaptive mesh generation
-- [ ] ETA dispatch engine
-- [ ] Three-tier rebalancing engine
-- [ ] Hospital routing engine
-- [ ] FastAPI layer
-- [ ] Simulation validation over Bengaluru incident data
+- [x] Bengaluru OSM road network loading
+- [x] Historical incident data pipeline
+- [x] Stage 1: Risk surface generation
+- [x] Stage 2: Surface evolution prediction
+- [x] Stage 3: Adaptive mesh generation
+- [x] ETA dispatch engine
+- [x] Three-tier rebalancing engine
+- [x] Hospital routing engine
+- [x] FastAPI layer
+- [x] Simulation validation over Bengaluru incident data
 - [ ] Live deployment trial
 - [ ] Reinforcement learning based rebalancing calibration
 - [ ] BBMP traffic signal integration
