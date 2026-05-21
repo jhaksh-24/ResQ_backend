@@ -60,6 +60,91 @@ Five independently deployable and testable engines, unified behind a FastAPI lay
                     └─────────────────────────────┘
 ```
 
+## System Pipeline
+
+```mermaid
+graph TD
+    A[108 Operator / App] -- "POST /incidents/report" --> B(FastAPI)
+    B -- "Save Incident" --> C[(PostgreSQL / PostGIS)]
+    B -- "Query confidence > 0" --> C
+    B -- "Async Task" --> D[Dispatch Engine]
+    
+    E[CRON Job] -- "Run" --> F(retrain_model.py)
+    F -- "Extract Features" --> G{LightGBM Trainer}
+    
+    C --> G
+    H[(Synthetic Base CSV)] --> G
+    
+    G -- "Overwrites" --> I[demand_lgbm.pkl]
+```
+
+## Database Schema
+
+```mermaid
+erDiagram
+    STATION {
+        int id PK
+        string name
+        float latitude
+        float longitude
+        geometry geom
+        int capacity
+    }
+    AMBULANCE {
+        int id PK
+        string vehicle_number
+        string status
+        float latitude
+        float longitude
+        int station_id FK
+        datetime updated_at
+    }
+    INCIDENT {
+        int id PK
+        float latitude
+        float longitude
+        string incident_type
+        int severity
+        float confidence_score
+        int ward_id
+        string ward_name
+        datetime timestamp
+        string status
+        datetime created_at
+        datetime resolved_at
+    }
+    HOSPITAL {
+        int id PK
+        string name
+        float latitude
+        float longitude
+        json specialties
+        int er_capacity
+        boolean is_24x7
+    }
+    DISPATCH_LOG {
+        int id PK
+        int incident_id FK
+        int ambulance_id FK
+        int hospital_id FK
+        int eta_seconds
+        int alternatives_considered
+        datetime dispatched_at
+    }
+    ZONE {
+        int id PK
+        geometry geom
+        float risk_level
+        datetime created_at
+        datetime updated_at
+    }
+    
+    STATION ||--o{ AMBULANCE : "bases"
+    INCIDENT ||--o{ DISPATCH_LOG : "has"
+    AMBULANCE ||--o{ DISPATCH_LOG : "assigned_in"
+    HOSPITAL ||--o{ DISPATCH_LOG : "destination_for"
+```
+
 ---
 
 ## Engines
