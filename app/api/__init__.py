@@ -3,6 +3,7 @@ from .dispatch import dispatch_router
 from .fleet import fleet_router
 from .hospital import hospital_router
 from .zones import zones_router
+from .incidents import incidents_router
 
 main_router = APIRouter()
 
@@ -20,4 +21,8 @@ main_router.include_router(
 
 main_router.include_router(
     zones_router
+)
+
+main_router.include_router(
+    incidents_router
 )
