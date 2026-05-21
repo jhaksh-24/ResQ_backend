@@ -145,6 +145,45 @@ erDiagram
     HOSPITAL ||--o{ DISPATCH_LOG : "destination_for"
 ```
 
+## State Machines & Workflows
+
+### Ambulance State Machine
+```mermaid
+stateDiagram-v2
+    [*] --> OFFLINE
+    OFFLINE --> AVAILABLE : Shift Starts
+    AVAILABLE --> DISPATCHED : Incident Assigned
+    DISPATCHED --> EN_ROUTE_HOSPITAL : Patient Picked Up
+    EN_ROUTE_HOSPITAL --> AT_HOSPITAL : Arrived at ER
+    AT_HOSPITAL --> RETURNING : Handoff Complete
+    RETURNING --> AVAILABLE : Reached Base/Zone
+    
+    %% Free Agent Reassignment
+    RETURNING --> DISPATCHED : Reassigned mid-route
+    AVAILABLE --> AVAILABLE : Tier 2/3 Rebalancing
+```
+
+### Dispatch Logic Flow
+```mermaid
+graph TD
+    A[New Incident] --> B{Are there ANY Available Units?}
+    B -- Yes --> C[Query Redis for all AVAILABLE ambulance coordinates]
+    B -- No --> D[Queue Incident / Trigger Tier 1 Urgent Mutual Aid]
+    
+    C --> E[Calculate ETA from all units to incident]
+    E --> F{OSRM Server Online?}
+    
+    F -- Yes --> G[OSRM Road-Network Routing]
+    F -- No --> H[Google Maps API Fallback Routing]
+    
+    G --> I[Sort units by ETA ascending]
+    H --> I
+    
+    I --> J[Select Unit with Minimum ETA]
+    J --> K[Update Unit Status to DISPATCHED]
+    K --> L[Log all alternatives to DispatchLog for audit]
+```
+
 ---
 
 ## Engines
@@ -262,7 +301,7 @@ Future expansion: Hyderabad, Chennai, Mumbai, Delhi-NCR.
 
 ## Directory Structure
 
-```
+```text
 resq-backend/
 │
 ├── app/
@@ -270,72 +309,53 @@ resq-backend/
 │   ├── config.py                 # Environment and configuration
 │   │
 │   ├── api/                      # Route definitions
-│   │   ├── dispatch.py           # Dispatch endpoints
+│   │   ├── dispatch.py           # Dispatch & override endpoints
 │   │   ├── fleet.py              # Fleet state endpoints
 │   │   ├── hospital.py           # Hospital routing endpoints
-│   │   └── zones.py              # Zone mesh endpoints
+│   │   ├── incidents.py          # Incident reporting endpoints
+│   │   └── zones.py              # Zone mesh & risk endpoints
 │   │
 │   ├── core/                     # Core business logic
 │   │   ├── dispatch_engine.py    # ETA computation and unit selection
+│   │   ├── fleet_state.py        # Live fleet state management (Redis)
+│   │   ├── hospital_router.py    # Emergency hospital ranking logic
+│   │   ├── logger.py             # Structured logging utility
 │   │   ├── rebalancing.py        # Three-tier rebalancing logic
-│   │   ├── hospital_router.py    # Hospital ranking logic
-│   │   └── fleet_state.py        # Live fleet state management
-│   │
-│   ├── spatial/                  # Spatial engine
-│   │   ├── mesh_generator.py     # Polygon mesh generation
-│   │   ├── risk_surface.py       # Stage 1: current risk surface
-│   │   ├── surface_predictor.py  # Stage 2: surface evolution prediction
-│   │   └── zone_manager.py       # Zone boundary management
-│   │
-│   ├── ml/                       # ML model definitions and inference
-│   │   ├── demand_model.py       # Demand surface model
-│   │   ├── mesh_model.py         # Mesh generation model
-│   │   └── model_registry.py     # Model loading and versioning
-│   │
-│   ├── data/                     # Data ingestion and processing
-│   │   ├── ingestion/
-│   │   │   ├── osm_loader.py     # OpenStreetMap / OSMnx pipeline
-│   │   │   ├── incident_loader.py# Historical incident data
-│   │   │   └── live_traffic.py   # Real-time traffic feed
-│   │   └── processing/
-│   │       ├── cleaner.py        # Data cleaning and validation
-│   │       └── feature_builder.py# Feature engineering for ML
+│   │   └── routing.py            # OSRM & Google Maps routing client
 │   │
 │   ├── db/                       # Database layer
-│   │   ├── models.py             # ORM models
+│   │   ├── models.py             # ORM models (PostgreSQL)
 │   │   ├── session.py            # DB session management
 │   │   └── migrations/           # Alembic migrations
 │   │
-│   └── utils/
-│       ├── geo.py                # Geospatial helper functions
-│       ├── logger.py             # Structured logging
-│       └── audit.py             # Dispatch decision audit trail
+│   ├── ml/                       # ML models for demand forecasting
+│   │   └── demand_model.py       # LightGBM demand predictor
+│   │
+│   └── spatial/                  # Spatial engine mapping
+│       ├── mesh_generator.py     # Weighted Voronoi tessellation
+│       └── risk_surface.py       # Gaussian KDE risk surface calculation
 │
-├── models/                       # Trained ML model artifacts
-│   └── .gitkeep
+├── scripts/                      # Utility and setup scripts
+│   ├── generate_synthetic_incidents.py
+│   ├── load_bengaluru_osm.py     # Download OSM road graph
+│   ├── retrain_model.py          # Cron script for LightGBM retraining
+│   ├── seed_stations.py          # Setup initial fleet and bases
+│   └── test_*.py                 # Helper scripts for API E2E validation
 │
-├── data/
-│   ├── raw/
-│   └── processed/
+├── tests/                        # Comprehensive test suite (Pytest)
+│   ├── conftest.py               # Fixtures, Mock DB, Mock Redis
+│   ├── test_api_*.py             # FastAPI endpoint integration tests
+│   ├── test_dispatch.py          # Dispatch Engine unit tests
+│   ├── test_fleet.py             # Fleet State & Redis unit tests
+│   ├── test_hospital.py          # Hospital Router unit tests
+│   ├── test_ml_demand.py         # ML Model unit tests
+│   ├── test_rebalancing.py       # Rebalancing Engine unit tests
+│   ├── test_routing.py           # Routing client unit tests
+│   └── test_spatial.py           # KDE and Mesh unit tests
 │
-├── tests/
-│   ├── test_dispatch.py
-│   ├── test_rebalancing.py
-│   ├── test_spatial.py
-│   └── test_hospital_router.py
-│
-├── scripts/
-│   ├── load_bengaluru_osm.py     # Initial OSM road network load
-│   └── simulate_incidents.py     # Synthetic incident generation for
-│                                 # dispatch engine testing without real data
-├── docs/
-│   └── architecture.md
-│
-├── requirements.txt
-├── .env.example
-├── .gitignore
-├── Dockerfile
-└── README.md
+├── requirements.txt              # Python dependencies
+├── .gitignore                    # Ignored files configuration
+└── README.md                     # Project documentation
 ```
 
 ---
