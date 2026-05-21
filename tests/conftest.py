@@ -19,8 +19,17 @@ def mock_redis():
         # Provide a basic fake dictionary for hgetall
         fake_store = {}
         
-        def fake_hset(name, mapping):
-            fake_store[name] = {k: str(v) for k, v in mapping.items()}
+        def fake_hset(name, mapping=None, **kwargs):
+            if name not in fake_store:
+                fake_store[name] = {}
+            if mapping:
+                fake_store[name].update({k: str(v) for k, v in mapping.items()})
+
+        def fake_hmset(name, mapping):
+            """hmset — used by fleet_state.py for Redis 3.x compat."""
+            if name not in fake_store:
+                fake_store[name] = {}
+            fake_store[name].update({k: str(v) for k, v in mapping.items()})
             
         def fake_hgetall(name):
             return fake_store.get(name, {})
@@ -28,7 +37,7 @@ def mock_redis():
         def fake_scan_iter(match):
             import re
             pattern = match.replace("*", ".*")
-            for k in fake_store.keys():
+            for k in list(fake_store.keys()):
                 if re.match(pattern, k):
                     yield k
                     
@@ -42,7 +51,7 @@ def mock_redis():
             return pipe
             
         mock.hset.side_effect = fake_hset
-        mock.hmset.side_effect = fake_hset
+        mock.hmset.side_effect = fake_hmset
         mock.hgetall.side_effect = fake_hgetall
         mock.scan_iter.side_effect = fake_scan_iter
         mock.delete.side_effect = fake_delete
