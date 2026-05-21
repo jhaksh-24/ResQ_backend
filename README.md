@@ -168,22 +168,27 @@ stateDiagram-v2
 ### Dispatch Logic Flow
 ```mermaid
 graph TD
-    A[New Incident] --> B{Are there ANY Available Units?}
-    B -- Yes --> C[Query Redis for all AVAILABLE ambulance coordinates]
-    B -- No --> D[Queue Incident / Trigger Tier 1 Urgent Mutual Aid]
-    
-    C --> E[Calculate ETA from all units to incident]
-    E --> F{OSRM Server Online?}
-    
-    F -- Yes --> G[OSRM Road-Network Routing]
-    F -- No --> H[Google Maps API Fallback Routing]
-    
-    G --> I[Sort units by ETA ascending]
-    H --> I
-    
-    I --> J[Select Unit with Minimum ETA]
-    J --> K[Update Unit Status to DISPATCHED]
-    K --> L[Log all alternatives to DispatchLog for audit]
+    A["New Incident (POST /dispatch/request)"] --> B["Query Redis: get_dispatchable_units()"]
+    B --> C{"Units found? (available + returning)"}
+    C -- "No units" --> D["HTTP 503: No ambulances available"]
+    C -- "Yes" --> E["Loop: Calculate ETA for each unit"]
+
+    E --> F{"OSRM route OK?"}
+    F -- "Yes" --> G["Use OSRM duration"]
+    F -- "No (timeout/error)" --> H{"Google Maps API Key set?"}
+    H -- "Yes" --> I["Use Google Maps Distance Matrix ETA"]
+    H -- "No key / API error" --> J["Return ETA = 999999 (deprioritised)"]
+
+    G --> K["Compare: keep lowest ETA"]
+    I --> K
+    J --> K
+
+    K --> L["Select unit with minimum ETA"]
+    L --> M["Save Incident record to PostgreSQL"]
+    M --> N["Save DispatchLog (audit trail) to PostgreSQL"]
+    N --> O["Update Redis: unit status → DISPATCHED"]
+    O --> P["WebSocket broadcast to live dashboard"]
+    P --> Q["Return dispatch confirmation to caller"]
 ```
 
 ---
