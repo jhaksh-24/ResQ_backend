@@ -1,6 +1,9 @@
 # Virtual environment
 venv/
 
+# AI session memory (claude-init scaffold)
+.claude/
+
 # Python
 __pycache__/
 *.pyc
@@ -17,3 +20,18 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Data files — large CSVs, models, and generated reports (not committed to git)
+# Regenerate with: python scripts/generate_synthetic_incidents.py
+app/data/raw/*.csv
+app/data/raw/*.txt
+app/data/raw/*.graphml
+app/data/models/*.pkl
+
+# Test coverage and pytest cache
+.coverage
+htmlcov/
+.pytest_cache/
+
+# App temporary cache
+cache/
