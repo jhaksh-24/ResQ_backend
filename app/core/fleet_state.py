@@ -21,7 +21,7 @@ class FleetStateManager:
         key = FleetStateManager._get_key(unit_id)
         # Enforce type casting to prevent corrupted fleet states
         lat_f, lng_f = float(lat), float(lng)
-        redis_client.hset(
+        redis_client.hmset(
             key,
             mapping={
                 "latitude": lat_f,
@@ -34,7 +34,7 @@ class FleetStateManager:
     def update_status(unit_id: int, status: str) -> None:
         """Updates the current status of an ambulance (e.g., 'available', 'dispatched')."""
         key = FleetStateManager._get_key(unit_id)
-        redis_client.hset(
+        redis_client.hmset(
             key,
             mapping={
                 "status": status,
