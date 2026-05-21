@@ -3,6 +3,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.api import main_router
 from app.core.rebalancing import rebalancing_task_loop
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
