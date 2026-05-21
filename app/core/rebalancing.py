@@ -1,11 +1,12 @@
-import logging
 from sqlalchemy.orm import Session
 from app.db.models import Zone
 from app.core.fleet_state import FleetStateManager
 from app.utils.distance import haversine_distance
 from geoalchemy2.functions import ST_X, ST_Y, ST_Centroid
+from app.core.logger import get_logger, log_event
+import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 from app.core.routing import get_osrm_eta
 
