@@ -19,11 +19,13 @@ class FleetStateManager:
     def update_location(unit_id: int, lat: float, lng: float) -> None:
         """Updates the GPS coordinates of an ambulance."""
         key = FleetStateManager._get_key(unit_id)
+        # Enforce type casting to prevent corrupted fleet states
+        lat_f, lng_f = float(lat), float(lng)
         redis_client.hset(
             key,
             mapping={
-                "latitude": lat,
-                "longitude": lng,
+                "latitude": lat_f,
+                "longitude": lng_f,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         )
@@ -63,4 +65,21 @@ class FleetStateManager:
                 state["unit_id"] = int(key.split(":")[1])
                 available_units.append(state)
                 
-        return available_units
+        return available_units
+
+    @staticmethod
+    def get_dispatchable_units() -> List[Dict[str, str]]:
+        """
+        Finds all ambulances that can be dispatched immediately.
+        This includes 'available' and 'returning' (free-agent reassignment).
+        """
+        dispatchable_units = []
+        all_keys = redis_client.scan_iter(match="ambulance:*")
+        
+        for key in all_keys:
+            state = redis_client.hgetall(key)
+            if state.get("status") in ["available", "returning"]:
+                state["unit_id"] = int(key.split(":")[1])
+                dispatchable_units.append(state)
+                
+        return dispatchable_units
