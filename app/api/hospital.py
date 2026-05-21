@@ -44,6 +44,45 @@ async def get_hospital_recommended(
         "recommendations": ranked_hospitals
     }
 
+from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
+
+class HospitalOverrideRequest(BaseModel):
+    incident_id: Optional[int] = None
+    override_reason: str
+    capacity_adjustment: int = -1
+
+@hospital_router.post("/{hospital_id}/override")
+def hospital_override(
+    hospital_id: int, 
+    request: HospitalOverrideRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    Hospital Override Feedback Loop.
+    Allows hospitals to manually signal that they are overwhelmed or divert an incoming ambulance.
+    Adjusting capacity dynamically ensures `hospital_router` will exclude them from recommendations.
+    """
+    hospital = db.query(Hospital).filter(Hospital.id == hospital_id).first()
+    if not hospital:
+        raise HTTPException(status_code=404, detail="Hospital not found")
+        
+    # Dynamically adjust capacity based on the override
+    # For emergency full diversions, they might pass capacity_adjustment = -hospital.er_capacity
+    new_capacity = max(0, hospital.er_capacity + request.capacity_adjustment)
+    hospital.er_capacity = new_capacity
+    db.commit()
+    
+    logger.warning(f"Hospital Override Triggered! Hospital ID {hospital_id} capacity adjusted by {request.capacity_adjustment}. New capacity: {new_capacity}. Reason: {request.override_reason}")
+    
+    return {
+        "status": "success",
+        "message": f"Hospital capacity overridden to {new_capacity}",
+        "hospital_id": hospital_id
+    }
+
 @hospital_router.get("/list")
 def get_hospital_list(db: Session = Depends(get_db)):
     """Fetch all registered hospitals and their basic metadata."""
