@@ -42,7 +42,7 @@ async def create_dispatch_request(request: DispatchRequest, db: Session = Depend
         incident_id=new_incident.id,
         ambulance_id=best_unit_id,
         eta_seconds=best_eta,
-        alternatives_considered=len(FleetStateManager.get_all_available()) # How many units were active
+        alternatives_considered=len(FleetStateManager.get_dispatchable_units()) # How many units were active
     )
     db.add(dispatch_log)
     db.commit()
