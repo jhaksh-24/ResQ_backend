@@ -1,14 +1,21 @@
 from app.core.routing import get_osrm_eta
 from app.core.fleet_state import FleetStateManager
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 async def find_best_ambulance(incident_lat, incident_lng):
-    ambulances_available = FleetStateManager.get_all_available()
+    # Free-agent reassignment and No-Withholding Policy:
+    # We fetch ALL dispatchable units (available OR returning) across the entire city.
+    ambulances_available = FleetStateManager.get_dispatchable_units()
+    
+    logger.info(f"No-Withholding Policy Enforced: Evaluating {len(ambulances_available)} cross-zone dispatchable units (including returning free-agents).")
 
     if len(ambulances_available) == 0:
         return None, None
 
     best_ambulance_id = None
-    best_eta = 999999
+    best_eta = float('inf')
 
     for ambulance in ambulances_available:
         ambulance_lat = float(ambulance["latitude"])
