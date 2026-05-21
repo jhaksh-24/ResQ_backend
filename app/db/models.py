@@ -115,6 +115,30 @@ class Incident (Base):
         String,
         nullable=False
     )
+    severity = Column(
+        Integer,
+        nullable=False,
+        default=1
+    )
+    confidence_score = Column(
+        Float,
+        nullable=False,
+        default=1.0
+    )
+    ward_id = Column(
+        Integer,
+        nullable=True
+    )
+    ward_name = Column(
+        String,
+        nullable=True
+    )
+    timestamp = Column(
+        DateTime(
+            timezone=True
+        ),
+        default=lambda: datetime.now(timezone.utc)
+    )
     status = Column(
         Enum(IncidentStatus),
         nullable=False,
