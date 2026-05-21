@@ -20,10 +20,15 @@ class DispatchRequest(BaseModel):
 @dispatch_router.post("/request")
 async def create_dispatch_request(request: DispatchRequest, db: Session = Depends(get_db)):
     """Handles an incoming emergency, calculates best route, and dispatches an ambulance."""
-    # 1. Ask the Brain (Dispatch Engine) for the best ambulance
+    # 1. Snapshot dispatchable units BEFORE the decision — audit must reflect
+    #    the exact pool that was evaluated, not a stale re-query after the fact.
+    dispatchable_snapshot = FleetStateManager.get_dispatchable_units()
+    alternatives_count = len(dispatchable_snapshot)
+    
+    # 2. Ask the Brain (Dispatch Engine) for the best ambulance
     best_unit_id, best_eta = await find_best_ambulance(request.latitude, request.longitude)
     
-    # 2. If no ambulances are available, fail gracefully
+    # 3. If no ambulances are available, fail gracefully
     if not best_unit_id:
         raise HTTPException(status_code=503, detail="No available ambulances at this time.")
 
@@ -37,12 +42,13 @@ async def create_dispatch_request(request: DispatchRequest, db: Session = Depend
     db.add(new_incident)
     db.flush() # Flush to assign the incident ID before committing
     
-    # 4. Create the Dispatch Log (Audit Trail)
+    # 5. Create the Dispatch Log (Audit Trail)
+    #    alternatives_count was captured BEFORE dispatch to avoid race conditions.
     dispatch_log = DispatchLog(
         incident_id=new_incident.id,
         ambulance_id=best_unit_id,
         eta_seconds=best_eta,
-        alternatives_considered=len(FleetStateManager.get_dispatchable_units()) # How many units were active
+        alternatives_considered=alternatives_count
     )
     db.add(dispatch_log)
     db.commit()
