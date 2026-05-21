@@ -49,7 +49,9 @@ async def rank_hospitals(
         # 3. Base Score Calculation
         # We start with a high base score and penalize based on drive time.
         # 1 second of drive time = 1 point penalty.
-        score = 10000 - eta_seconds
+        # Floor at 0 so ETAs exceeding ~2.7 hours don't produce negative scores
+        # that would break ranking when specialty bonuses are applied.
+        score = max(0, 10000 - eta_seconds)
         
         # 4. Specialty Bonus Application
         # If the incident requires a specific specialty, check the JSON array.
