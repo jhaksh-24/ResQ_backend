@@ -62,10 +62,10 @@ async def rank_hospitals(
                 # to prioritize correct care over absolute nearest location.
                 score += 5000 
                 
-        # 5. Capacity Penalties (Future enhancement hook)
+        # 5. Capacity Checks
         if hospital.er_capacity <= 0:
-            # Severely penalize full hospitals
-            score -= 8000
+            # Strictly ignore full hospitals
+            continue
             
         ranked_list.append({
             "hospital_id": hospital.id,
