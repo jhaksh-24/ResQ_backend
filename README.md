@@ -369,8 +369,6 @@ resq-backend/
 
 ## Getting Started
 
-> Active development. Setup instructions will be updated as the stack stabilises.
-
 ### Prerequisites
 
 - Python 3.11+
@@ -381,23 +379,69 @@ resq-backend/
 ### Installation
 
 ```bash
-git clone https://github.com/[org]/resq-backend.git
-cd resq-backend
+git clone https://github.com/jhaksh-24/ResQ_backend.git
+cd ResQ_backend
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate        # Linux/macOS
+# .\venv\Scripts\activate       # Windows
 pip install -r requirements.txt
 cp .env.example .env
-# configure environment variables
+# configure environment variables (see table below)
 uvicorn app.main:app --reload
 ```
 
-### Running the Simulation
+### Environment Variables
 
-`simulate_incidents.py` generates synthetic incident data over the Bengaluru road network, allowing full dispatch engine testing without requiring real incident records. Use this to validate ETA computation, rebalancing triggers, and audit logging before connecting live data sources.
+| Variable | Description | Required |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string with PostGIS | Yes |
+| `REDIS_URL` | Redis connection string for fleet state | Yes |
+| `OSRM_BASE_URL` | OSRM server URL (default: `http://localhost:5000`) | Yes |
+| `GOOGLE_MAPS_API_KEY` | Google Maps Distance Matrix API key (routing fallback) | No (fallback disabled if absent) |
+| `APP_ENV` | Environment: `development` / `production` | No |
+| `DEBUG` | Enable debug logging | No |
+
+### Running Synthetic Data Generation
 
 ```bash
-python scripts/simulate_incidents.py --incidents 1000 --duration-hours 8
+python scripts/generate_synthetic_incidents.py
 ```
+
+Generates synthetic incident data over the Bengaluru road network, allowing full dispatch engine testing without requiring real incident records. Use this to validate ETA computation, rebalancing triggers, and audit logging before connecting live data sources.
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=app --cov-report=term-missing
+
+# Run a specific test file
+pytest tests/test_dispatch.py -v
+```
+
+**Current status:** 44 tests passing, 81% code coverage across `app/`.
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/dispatch/request` | Submit a new incident and trigger automatic dispatch |
+| `GET` | `/dispatch/history` | Fetch recent dispatch audit logs |
+| `POST` | `/incidents/report` | Report an incident (from 108 operator / app) |
+| `GET` | `/incidents/` | List all incidents with optional status filter |
+| `POST` | `/fleet/update-location` | Push GPS coordinates for an ambulance |
+| `POST` | `/fleet/update-status` | Change ambulance status (available, offline, etc.) |
+| `GET` | `/fleet/status` | Get real-time fleet state from Redis |
+| `GET` | `/fleet/unit/{unit_id}` | Get a single ambulance's live state |
+| `POST` | `/hospital/register` | Register a new hospital |
+| `GET` | `/hospital/nearby` | Find ranked hospitals by ETA, specialty, and capacity |
+| `GET` | `/zones/mesh` | Generate and return the current dispatch zone mesh |
+| `GET` | `/zones/risk-surface` | Query the KDE risk surface at a grid resolution |
 
 ---
 
