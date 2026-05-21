@@ -42,6 +42,7 @@ def mock_redis():
             return pipe
             
         mock.hset.side_effect = fake_hset
+        mock.hmset.side_effect = fake_hset
         mock.hgetall.side_effect = fake_hgetall
         mock.scan_iter.side_effect = fake_scan_iter
         mock.delete.side_effect = fake_delete
