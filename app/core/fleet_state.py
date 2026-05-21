@@ -1,7 +1,11 @@
 import redis
+import warnings
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
 from app.config import get_settings
+
+# Suppress redis-py deprecation warning for hmset — we use it for Redis 3.x compat
+warnings.filterwarnings("ignore", message=r"Redis\.hmset", category=DeprecationWarning)
 
 settings = get_settings()
 
@@ -21,26 +25,22 @@ class FleetStateManager:
         key = FleetStateManager._get_key(unit_id)
         # Enforce type casting to prevent corrupted fleet states
         lat_f, lng_f = float(lat), float(lng)
-        redis_client.hmset(
-            key,
-            mapping={
-                "latitude": lat_f,
-                "longitude": lng_f,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-        )
+        # Use hmset for Redis 3.x compatibility (hset mapping= requires Redis 4.0+)
+        redis_client.hmset(key, {
+            "latitude": lat_f,
+            "longitude": lng_f,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
 
     @staticmethod
     def update_status(unit_id: int, status: str) -> None:
         """Updates the current status of an ambulance (e.g., 'available', 'dispatched')."""
         key = FleetStateManager._get_key(unit_id)
-        redis_client.hmset(
-            key,
-            mapping={
-                "status": status,
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            }
-        )
+        # Use hmset for Redis 3.x compatibility (hset mapping= requires Redis 4.0+)
+        redis_client.hmset(key, {
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
 
     @staticmethod
     def get_unit(unit_id: int) -> Optional[Dict[str, str]]:
