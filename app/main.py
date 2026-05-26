@@ -1,7 +1,9 @@
 import asyncio
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api import main_router
+from app.api.mesh import mesh_router
 from app.core.rebalancing import rebalancing_task_loop
 from app.core.logger import get_logger
 
@@ -22,6 +24,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS — allow the Expo/React Native frontend to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
 def root():
     return {
@@ -34,3 +45,4 @@ async def health_check():
     return {"status": "healthy"}
 
 app.include_router(main_router)
+app.include_router(mesh_router)
