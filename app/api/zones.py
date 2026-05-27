@@ -26,6 +26,28 @@ zones_router = APIRouter(
 )
 
 
+@zones_router.get("/stations")
+def get_dispatch_stations(db: Session = Depends(get_db)):
+    """
+    Returns ambulance dispatch centers (Voronoi seeds for the zone mesh).
+    Used by the operator live map.
+    """
+    stations = db.query(Station).order_by(Station.id).all()
+    return {
+        "stations": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "latitude": float(s.latitude),
+                "longitude": float(s.longitude),
+                "capacity": s.capacity,
+            }
+            for s in stations
+        ],
+        "total": len(stations),
+    }
+
+
 @zones_router.get("/mesh")
 def get_zones_mesh(db: Session = Depends(get_db)):
     """
