@@ -320,7 +320,8 @@ resq-backend/
 │   │   ├── fleet.py              # Fleet state endpoints
 │   │   ├── hospital.py           # Hospital routing endpoints
 │   │   ├── incidents.py          # Incident reporting endpoints
-│   │   └── zones.py              # Zone mesh & risk endpoints
+│   │   ├── mesh.py               # Dispatch center & mesh overlay API
+│   │   └── zones.py              # Zone generation & spatial risk API
 │   │
 │   ├── core/                     # Core business logic
 │   │   ├── dispatch_engine.py    # ETA computation and unit selection
@@ -345,8 +346,9 @@ resq-backend/
 ├── scripts/                      # Utility and setup scripts
 │   ├── generate_synthetic_incidents.py
 │   ├── load_bengaluru_osm.py     # Download OSM road graph
+│   ├── reseed_all.py             # Full DB wipe, risk-weighted seeding & mesh gen
 │   ├── retrain_model.py          # Cron script for LightGBM retraining
-│   ├── seed_stations.py          # Setup initial fleet and bases
+│   ├── seed_stations.py          # Setup initial fleet and bases (legacy)
 │   └── test_*.py                 # Helper scripts for API E2E validation
 │
 ├── tests/                        # Comprehensive test suite (Pytest)
@@ -401,13 +403,24 @@ uvicorn app.main:app --reload
 | `APP_ENV` | Environment: `development` / `production` | No |
 | `DEBUG` | Enable debug logging | No |
 
-### Running Synthetic Data Generation
+### Running Synthetic Data Generation & Seeding
 
+1. **Generate synthetic data:**
 ```bash
 python scripts/generate_synthetic_incidents.py
 ```
 
-Generates synthetic incident data over the Bengaluru road network, allowing full dispatch engine testing without requiring real incident records. Use this to validate ETA computation, rebalancing triggers, and audit logging before connecting live data sources.
+2. **Seed the database & Redis cache:**
+```bash
+python scripts/reseed_all.py
+```
+
+The `reseed_all.py` script performs a complete spatial setup:
+- Clears existing data in PostgreSQL and Redis.
+- Seeds hospitals.
+- Dynamically generates dispatch centers proportional to risk weights (e.g., more centers in the ORR corridor).
+- Seeds thousands of ambulances and syncs their live state to Redis.
+- Computes the KDE risk surface and generates the adaptive Voronoi zone mesh.
 
 ### Running Tests
 
@@ -433,14 +446,16 @@ pytest tests/test_dispatch.py -v
 | `POST` | `/dispatch/request` | Submit a new incident and trigger automatic dispatch |
 | `GET` | `/dispatch/history` | Fetch recent dispatch audit logs |
 | `POST` | `/incidents/report` | Report an incident (from 108 operator / app) |
-| `GET` | `/incidents/` | List all incidents with optional status filter |
-| `POST` | `/fleet/update-location` | Push GPS coordinates for an ambulance |
-| `POST` | `/fleet/update-status` | Change ambulance status (available, offline, etc.) |
+| `POST` | `/fleet/{unit_id}/location`| Push GPS coordinates for an ambulance |
+| `POST` | `/fleet/{unit_id}/status`  | Change ambulance status (available, offline, etc.) |
 | `GET` | `/fleet/status` | Get real-time fleet state from Redis |
-| `GET` | `/fleet/unit/{unit_id}` | Get a single ambulance's live state |
-| `POST` | `/hospital/register` | Register a new hospital |
-| `GET` | `/hospital/nearby` | Find ranked hospitals by ETA, specialty, and capacity |
-| `GET` | `/zones/mesh` | Generate and return the current dispatch zone mesh |
+| `GET` | `/hospital/list` | Get all registered hospitals |
+| `GET` | `/hospital/recommend` | Find ranked hospitals by ETA, specialty, and capacity |
+| `GET` | `/api/dispatch-centers`| Operator UI map: Dispatch centers with live fleet counts |
+| `GET` | `/api/mesh` | Operator UI map: Computes KNN mesh links between centers |
+| `GET` | `/zones/mesh` | Get the current dispatch Voronoi zone mesh (GeoJSON) |
+| `POST` | `/zones/generate` | Trigger full risk surface and mesh regeneration |
+| `GET` | `/zones/stations` | List all dispatch centers used as Voronoi seeds |
 | `GET` | `/zones/risk-surface` | Query the KDE risk surface at a grid resolution |
 
 ---
